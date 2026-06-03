@@ -1591,7 +1591,7 @@ public:
   }
 
   // Default encoding on z/OS is IBM-1047 and UTF-8 otherwise
-  StringRef getDefaultNarrowTextEncoding() const {
+  StringRef getDefaultOrdinaryTextEncoding() const {
     if (getTriple().getOS() == llvm::Triple::ZOS)
       return "IBM-1047";
     return "UTF-8";
