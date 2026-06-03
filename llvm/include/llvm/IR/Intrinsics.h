@@ -16,6 +16,7 @@
 #define LLVM_IR_INTRINSICS_H
 
 #include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/TypeSize.h"
 #include <optional>
@@ -61,6 +62,18 @@ LLVM_ABI StringRef getName(ID id);
 /// Return the LLVM name for an intrinsic, without encoded types for
 /// overloading, such as "llvm.ssa.copy".
 LLVM_ABI StringRef getBaseName(ID id);
+
+/// \returns the target feature expression required by an intrinsic.
+LLVM_ABI StringRef getRequiredTargetFeatures(ID id);
+
+/// Sentinel value for an intrinsic's required-target-features string. When an
+/// intrinsic's \c TargetFeatures is set to this keyword, whether the intrinsic
+/// is supported is decided by a target-specific hook
+/// (TargetSubtargetInfo::isIntrinsicSupportedByTarget) rather than by
+/// evaluating a subtarget feature expression. Use it when support depends on
+/// more than the subtarget features, such as a particular overload/mangling or
+/// argument combination accepted by some targets but not others.
+inline constexpr StringLiteral CustomTargetFeatures = "$custom";
 
 /// Return the LLVM name for an intrinsic, such as "llvm.ppc.altivec.lvx" or
 /// "llvm.ssa.copy.p0s_s.1". Note, this version of getName supports overloads.

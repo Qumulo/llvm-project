@@ -14,6 +14,7 @@
 #define LLVM_CODEGEN_TARGETSUBTARGETINFO_H
 
 #include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/CodeGen/MacroFusion.h"
@@ -29,6 +30,7 @@
 namespace llvm {
 
 class APInt;
+class CallBase;
 class MachineFunction;
 class ScheduleDAGMutation;
 class CallLowering;
@@ -86,6 +88,10 @@ public:
   ~TargetSubtargetInfo() override;
 
   virtual bool isXRaySupported() const { return false; }
+
+  /// \returns true if the target intrinsic \p IntrinsicID used by \p CB is
+  /// supported by this subtarget.
+  bool isIntrinsicSupported(unsigned IntrinsicID, const CallBase &CB) const;
 
   // Interfaces to the major aspects of target machine information:
   //
@@ -173,7 +179,7 @@ public:
   ///
   /// Similar in behavior to `isZeroIdiom`. However, it knows how to identify
   /// all dependency breaking instructions (i.e. not just zero-idioms).
-  /// 
+  ///
   /// As for `isZeroIdiom`, this method returns a mask of "broken" dependencies.
   /// (See method `isZeroIdiom` for a detailed description of Mask).
   virtual bool isDependencyBreaking(const MachineInstr *MI, APInt &Mask) const {
@@ -364,6 +370,21 @@ public:
   }
 
   virtual bool isRegisterReservedByUser(Register R) const { return false; }
+
+protected:
+  /// Target hook for intrinsics whose required-feature string is
+  /// Intrinsic::CustomTargetFeatures. Decides whether \p IntrinsicID as used by
+  /// \p CB is supported by this subtarget; targets can inspect the call (e.g.
+  /// the specific overload/mangling or argument combination). Called by
+  /// isIntrinsicSupported and not cached, so the result may depend on \p CB.
+  virtual bool isIntrinsicSupportedByTarget(unsigned IntrinsicID,
+                                            const CallBase &CB) const {
+    return true;
+  }
+
+private:
+  /// Lazy, incrementally-populated cache for isIntrinsicSupported().
+  mutable DenseMap<unsigned, bool> IntrinsicSupportCache;
 };
 } // end namespace llvm
 
