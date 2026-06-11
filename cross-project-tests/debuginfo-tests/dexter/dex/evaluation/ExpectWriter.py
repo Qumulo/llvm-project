@@ -10,7 +10,7 @@ from collections import defaultdict
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 from dex.dextIR import DextIR, StepIR, ValueIR
-from dex.evaluation.StateMatch import get_active_where_matches
+from dex.evaluation.StateMatch import StateMatchContext, get_active_where_matches
 from dex.test_script.Nodes import DexRange, Expect, Line, Then, Value, ValueAll, Where
 from dex.test_script.Script import DexterScript, Scope
 from dex.tools.Main import Context
@@ -158,10 +158,12 @@ class StepExpectWriter:
     """Processes all active, unknown expects at a given debugger step and produces ExpectedValueWriter results for
     each."""
 
-    def __init__(self, step: StepIR, script: DexterScript):
+    def __init__(
+        self, step: StepIR, script: DexterScript, state_match_context: StateMatchContext
+    ):
         self.step = step
         self.script = script
-        self.state_match = get_active_where_matches(script, step)
+        self.state_match = get_active_where_matches(script, step, state_match_context)
         active_expects = {
             expect
             for where_match in self.state_match.values()
@@ -227,7 +229,11 @@ class ScriptExpectWriter:
         if not self.unknown_expect_rewrites and not self.scope_expect_rewrites:
             return
 
-        self.step_writers = [StepExpectWriter(step, script) for step in dext_ir.steps]
+        state_match_context = StateMatchContext()
+        self.step_writers = [
+            StepExpectWriter(step, script, state_match_context)
+            for step in dext_ir.steps
+        ]
         for step_writer in self.step_writers:
             step_idx = step_writer.step.step_index
             for (
