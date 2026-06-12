@@ -269,7 +269,12 @@ class ScriptExpectWriter:
         ):
             return
 
-        state_match_context = StateMatchContext()
+        def check_condition(step: StepIR, frame_idx: int, condition: str):
+            cond_value = step.frames[frame_idx].watches[condition]
+            result = cond_value.could_evaluate and cond_value.value.lower() == "true"
+            return result
+
+        state_match_context = StateMatchContext(check_condition=check_condition)
         self.step_writers = [
             StepExpectWriter(step, script, state_match_context)
             for step in dext_ir.steps
