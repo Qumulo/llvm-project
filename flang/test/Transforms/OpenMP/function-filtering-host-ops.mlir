@@ -436,7 +436,7 @@ module attributes {omp.is_target_device = true} {
     omp.target allocate(%ref : !fir.ref<i32> -> %ref : !fir.ref<i32>)
                depend(taskdependin -> %ref : !fir.ref<i32>)
                device(%int : i32) if(%bool) thread_limit(%int : i32)
-               in_reduction(@reduction %ref -> %arg0 : !fir.ref<i32>)
+               in_reduction(@reduction %ref : !fir.ref<i32>)
                private(@privatizer %ref -> %arg1 : !fir.ref<i32>) {
       omp.terminator
     }

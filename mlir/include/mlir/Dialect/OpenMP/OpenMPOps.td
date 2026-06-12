@@ -1617,6 +1617,15 @@ def TargetOp : OpenMP_Op<"target", traits = [
   ];
 
   let extraClassDeclaration = [{
+    // Override BlockArgOpenMPOpInterface method because `in_reduction` list
+    // items on `omp.target` do not define entry block arguments. The reduction
+    // variable is accessed inside the target body through its matching
+    // `map_entries` block argument; the `in_reduction` operands are kept only
+    // as host-side metadata used to look up the per-task private storage.
+    unsigned numInReductionBlockArgs() {
+      return 0;
+    }
+
     mlir::Value getMappedValueForPrivateVar(unsigned privVarIdx) {
       std::optional<DenseI64ArrayAttr> privateMapIdices = getPrivateMapsAttr();
 
@@ -1654,7 +1663,7 @@ def TargetOp : OpenMP_Op<"target", traits = [
     static ::mlir::omp::TargetExecMode
     getKernelExecFlags(Operation *capturedOp,
                        bool *hostEvalTripCount = nullptr);
-  }] # clausesExtraClassDeclaration;
+  }]#clausesExtraClassDeclaration;
 
   let assemblyFormat = clausesAssemblyFormat # [{
     ( `map_iterated` `(` $map_iterated^ `:` type($map_iterated) `)` )?

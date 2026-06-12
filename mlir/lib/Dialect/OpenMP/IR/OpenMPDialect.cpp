@@ -1070,6 +1070,10 @@ struct ReductionParseArgs {
   DenseBoolArrayAttr &byref;
   ArrayAttr &syms;
   ReductionModifierAttr *modifier;
+  // When false, the clause operands are parsed without defining entry block
+  // arguments (i.e. without the `-> %arg` mapping). Used for `in_reduction` on
+  // `omp.target`, where the list items are host-side metadata only.
+  bool regionArgs = true;
   ReductionParseArgs(SmallVectorImpl<OpAsmParser::UnresolvedOperand> &vars,
                      SmallVectorImpl<Type> &types, DenseBoolArrayAttr &byref,
                      ArrayAttr &syms, ReductionModifierAttr *mod = nullptr)
@@ -1100,12 +1104,12 @@ static ParseResult parseClauseWithRegionArgs(
     SmallVectorImpl<OpAsmParser::Argument> &regionPrivateArgs,
     ArrayAttr *symbols = nullptr, DenseI64ArrayAttr *mapIndices = nullptr,
     DenseBoolArrayAttr *byref = nullptr,
-    ReductionModifierAttr *modifier = nullptr,
-    UnitAttr *needsBarrier = nullptr) {
+    ReductionModifierAttr *modifier = nullptr, UnitAttr *needsBarrier = nullptr,
+    bool parseRegionArgs = true) {
   SmallVector<SymbolRefAttr> symbolVec;
   SmallVector<int64_t> mapIndicesVec;
   SmallVector<bool> isByRefVec;
-  unsigned regionArgOffset = regionPrivateArgs.size();
+  [[maybe_unused]] unsigned regionArgOffset = regionPrivateArgs.size();
 
   if (parser.parseLParen())
     return failure();
@@ -1132,9 +1136,12 @@ static ParseResult parseClauseWithRegionArgs(
         if (symbols && parser.parseAttribute(symbolVec.emplace_back()))
           return failure();
 
-        if (parser.parseOperand(operands.emplace_back()) ||
-            parser.parseArrow() ||
-            parser.parseArgument(regionPrivateArgs.emplace_back()))
+        if (parser.parseOperand(operands.emplace_back()))
+          return failure();
+
+        if (parseRegionArgs &&
+            (parser.parseArrow() ||
+             parser.parseArgument(regionPrivateArgs.emplace_back())))
           return failure();
 
         if (mapIndices) {
@@ -1175,11 +1182,13 @@ static ParseResult parseClauseWithRegionArgs(
       *needsBarrier = mlir::UnitAttr::get(parser.getContext());
   }
 
-  auto *argsBegin = regionPrivateArgs.begin();
-  MutableArrayRef argsSubrange(argsBegin + regionArgOffset,
-                               argsBegin + regionArgOffset + types.size());
-  for (auto [prv, type] : llvm::zip_equal(argsSubrange, types)) {
-    prv.type = type;
+  if (parseRegionArgs) {
+    auto *argsBegin = regionPrivateArgs.begin();
+    MutableArrayRef argsSubrange(argsBegin + regionArgOffset,
+                                 argsBegin + regionArgOffset + types.size());
+    for (auto [prv, type] : llvm::zip_equal(argsSubrange, types)) {
+      prv.type = type;
+    }
   }
 
   if (symbols) {
@@ -1239,7 +1248,8 @@ static ParseResult parseBlockArgClause(
     if (failed(parseClauseWithRegionArgs(
             parser, reductionArgs->vars, reductionArgs->types, entryBlockArgs,
             &reductionArgs->syms, /*mapIndices=*/nullptr, &reductionArgs->byref,
-            reductionArgs->modifier)))
+            reductionArgs->modifier, /*needsBarrier=*/nullptr,
+            reductionArgs->regionArgs)))
       return failure();
   }
   return success();
@@ -1318,6 +1328,8 @@ static ParseResult parseTargetOpRegion(
   args.hostEvalArgs.emplace(hostEvalVars, hostEvalTypes);
   args.inReductionArgs.emplace(inReductionVars, inReductionTypes,
                                inReductionByref, inReductionSyms);
+  // `in_reduction` on `omp.target` does not define entry block arguments.
+  args.inReductionArgs->regionArgs = false;
   args.mapArgs.emplace(mapVars, mapTypes);
   args.privateArgs.emplace(privateVars, privateTypes, privateSyms,
                            privateNeedsBarrier, &privateMaps);
@@ -1438,6 +1450,10 @@ struct ReductionPrintArgs {
   DenseBoolArrayAttr byref;
   ArrayAttr syms;
   ReductionModifierAttr modifier;
+  // When false, the clause operands are printed without their entry block
+  // arguments (i.e. without the `-> %arg` mapping). Used for `in_reduction` on
+  // `omp.target`, where the list items are host-side metadata only.
+  bool regionArgs = true;
   ReductionPrintArgs(ValueRange vars, TypeRange types, DenseBoolArrayAttr byref,
                      ArrayAttr syms, ReductionModifierAttr mod = nullptr)
       : vars(vars), types(types), byref(byref), syms(syms), modifier(mod) {}
@@ -1460,8 +1476,9 @@ static void printClauseWithRegionArgs(
     ValueRange argsSubrange, ValueRange operands, TypeRange types,
     ArrayAttr symbols = nullptr, DenseI64ArrayAttr mapIndices = nullptr,
     DenseBoolArrayAttr byref = nullptr,
-    ReductionModifierAttr modifier = nullptr, UnitAttr needsBarrier = nullptr) {
-  if (argsSubrange.empty())
+    ReductionModifierAttr modifier = nullptr, UnitAttr needsBarrier = nullptr,
+    bool printRegionArgs = true) {
+  if (printRegionArgs ? argsSubrange.empty() : operands.empty())
     return;
 
   p << clauseName << "(";
@@ -1484,21 +1501,37 @@ static void printClauseWithRegionArgs(
     byref = DenseBoolArrayAttr::get(ctx, values);
   }
 
-  llvm::interleaveComma(llvm::zip_equal(operands, argsSubrange, symbols,
-                                        mapIndices.asArrayRef(),
-                                        byref.asArrayRef()),
-                        p, [&p](auto t) {
-                          auto [op, arg, sym, map, isByRef] = t;
-                          if (isByRef)
-                            p << "byref ";
-                          if (sym)
-                            p << sym << " ";
+  if (printRegionArgs) {
+    llvm::interleaveComma(llvm::zip_equal(operands, argsSubrange, symbols,
+                                          mapIndices.asArrayRef(),
+                                          byref.asArrayRef()),
+                          p, [&p](auto t) {
+                            auto [op, arg, sym, map, isByRef] = t;
+                            if (isByRef)
+                              p << "byref ";
+                            if (sym)
+                              p << sym << " ";
 
-                          p << op << " -> " << arg;
+                            p << op << " -> " << arg;
 
-                          if (map != -1)
-                            p << " [map_idx=" << map << "]";
-                        });
+                            if (map != -1)
+                              p << " [map_idx=" << map << "]";
+                          });
+  } else {
+    // The clause operands carry no entry block arguments, so the `-> %arg`
+    // mapping is omitted (e.g. `in_reduction` on `omp.target`).
+    llvm::interleaveComma(
+        llvm::zip_equal(operands, symbols, byref.asArrayRef()), p,
+        [&p](auto t) {
+          auto [op, sym, isByRef] = t;
+          if (isByRef)
+            p << "byref ";
+          if (sym)
+            p << sym << " ";
+
+          p << op;
+        });
+  }
   p << " : ";
   llvm::interleaveComma(types, p);
   p << ") ";
@@ -1530,10 +1563,11 @@ printBlockArgClause(OpAsmPrinter &p, MLIRContext *ctx, StringRef clauseName,
                     ValueRange argsSubrange,
                     std::optional<ReductionPrintArgs> reductionArgs) {
   if (reductionArgs)
-    printClauseWithRegionArgs(p, ctx, clauseName, argsSubrange,
-                              reductionArgs->vars, reductionArgs->types,
-                              reductionArgs->syms, /*mapIndices=*/nullptr,
-                              reductionArgs->byref, reductionArgs->modifier);
+    printClauseWithRegionArgs(
+        p, ctx, clauseName, argsSubrange, reductionArgs->vars,
+        reductionArgs->types, reductionArgs->syms, /*mapIndices=*/nullptr,
+        reductionArgs->byref, reductionArgs->modifier,
+        /*needsBarrier=*/nullptr, reductionArgs->regionArgs);
 }
 
 static void printBlockArgRegion(OpAsmPrinter &p, Operation *op, Region &region,
@@ -1582,6 +1616,8 @@ static void printTargetOpRegion(
   args.hostEvalArgs.emplace(hostEvalVars, hostEvalTypes);
   args.inReductionArgs.emplace(inReductionVars, inReductionTypes,
                                inReductionByref, inReductionSyms);
+  // `in_reduction` on `omp.target` does not define entry block arguments.
+  args.inReductionArgs->regionArgs = false;
   args.mapArgs.emplace(mapVars, mapTypes);
   args.privateArgs.emplace(privateVars, privateTypes, privateSyms,
                            privateNeedsBarrier, privateMaps);
@@ -2579,8 +2615,7 @@ LogicalResult TargetUpdateOp::verify() {
 void TargetOp::build(OpBuilder &builder, OperationState &state,
                      const TargetOperands &clauses) {
   MLIRContext *ctx = builder.getContext();
-  // TODO Store clauses in op: allocateVars, allocatorVars, inReductionVars,
-  // inReductionByref, inReductionSyms.
+  // TODO Store clauses in op: allocateVars, allocatorVars.
   TargetOp::build(
       builder, state, /*allocate_vars=*/{}, /*allocator_vars=*/{}, clauses.bare,
       makeArrayAttr(ctx, clauses.dependKinds), clauses.dependVars,
@@ -2588,9 +2623,10 @@ void TargetOp::build(OpBuilder &builder, OperationState &state,
       clauses.device, clauses.dynGroupprivateAccessGroup,
       clauses.dynGroupprivateFallback, clauses.dynGroupprivateSize,
       clauses.hasDeviceAddrVars, clauses.hostEvalVars, clauses.ifExpr,
-      /*in_reduction_vars=*/{}, /*in_reduction_byref=*/nullptr,
-      /*in_reduction_syms=*/nullptr, clauses.isDevicePtrVars, clauses.mapVars,
-      clauses.mapIterated, clauses.nowait, clauses.privateVars,
+      clauses.inReductionVars,
+      makeDenseBoolArrayAttr(ctx, clauses.inReductionByref),
+      makeArrayAttr(ctx, clauses.inReductionSyms), clauses.isDevicePtrVars,
+      clauses.mapVars, clauses.mapIterated, clauses.nowait, clauses.privateVars,
       makeArrayAttr(ctx, clauses.privateSyms), clauses.privateNeedsBarrier,
       clauses.threadLimitVars,
       /*private_maps=*/nullptr);
@@ -2615,6 +2651,11 @@ LogicalResult TargetOp::verify() {
     return failure();
 
   if (failed(verifyPrivateVarList(*this)))
+    return failure();
+
+  if (failed(verifyReductionVarList(*this, getInReductionSyms(),
+                                    getInReductionVars(),
+                                    getInReductionByref())))
     return failure();
 
   return verifyPrivateVarsMapping(*this);

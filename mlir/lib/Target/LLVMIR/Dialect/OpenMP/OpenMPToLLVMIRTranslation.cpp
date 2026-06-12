@@ -369,10 +369,39 @@ static LogicalResult checkImplementationStatus(Operation &op) {
     if (op.getHint())
       op.emitWarning("hint clause discarded");
   };
+  // omp.target implements the non-byref in_reduction form for the
+  // host-fallback path. The byref form is not implemented yet, and declare
+  // reductions that use a cleanup region or a two-argument (alloc) initializer
+  // are also not implemented. (omp.task / omp.taskloop in_reduction are checked
+  // separately via checkInReductionByref.)
   auto checkInReduction = [&todo](auto op, LogicalResult &result) {
-    if (!op.getInReductionVars().empty() || op.getInReductionByref() ||
-        op.getInReductionSyms())
-      result = todo("in_reduction");
+    if (auto byrefAttr = op.getInReductionByref())
+      for (bool isByRef : *byrefAttr)
+        if (isByRef) {
+          result = todo("in_reduction with byref modifier");
+          return;
+        }
+    if (isa<omp::TargetOp>(op.getOperation())) {
+      if (auto inReductionSyms = op.getInReductionSyms()) {
+        for (auto sym :
+             (*inReductionSyms).template getAsRange<SymbolRefAttr>()) {
+          auto decl =
+              SymbolTable::lookupNearestSymbolFrom<omp::DeclareReductionOp>(
+                  op, sym);
+          // Symbol resolution is guaranteed by the op verifier.
+          if (!decl)
+            continue;
+          if (decl.getInitializerRegion().front().getNumArguments() != 1) {
+            result = todo("in_reduction with two-argument initializer");
+            return;
+          }
+          if (!decl.getCleanupRegion().empty()) {
+            result = todo("in_reduction with cleanup region");
+            return;
+          }
+        }
+      }
+    }
   };
   auto checkNowait = [&todo](auto op, LogicalResult &result) {
     if (op.getNowait())
@@ -524,6 +553,10 @@ static LogicalResult checkImplementationStatus(Operation &op) {
       .Case([&](omp::TargetOp op) {
         checkAllocate(op, result);
         checkBare(op, result);
+        // The byref / cleanup-region / two-argument-initializer in_reduction
+        // shapes on omp.target are not implemented yet (handled by
+        // checkInReduction). The device-side / offload-entry cases are
+        // diagnosed inline in convertOmpTarget.
         checkInReduction(op, result);
         checkMap(op, result);
         checkThreadLimit(op, result);
@@ -8363,6 +8396,59 @@ convertOmpTarget(Operation &opInst, llvm::IRBuilderBase &builder,
   bool isOffloadEntry =
       isTargetDevice || !ompBuilder->Config.TargetTriples.empty();
 
+  // Validate and resolve in_reduction clauses on omp.target. We currently
+  // only support the non-offload host-fallback path: the per-task private
+  // pointer is obtained by calling __kmpc_task_reduction_get_th_data inside
+  // the to-be-outlined target task body. Threading that pointer through the
+  // device kernel argument list is left as follow-up work.
+  SmallVector<llvm::Value *> inRedOrigPtrs;
+  SmallVector<unsigned> inRedMapArgIdx;
+  if (!targetOp.getInReductionVars().empty()) {
+    if (isTargetDevice || isOffloadEntry)
+      return opInst.emitError(
+          "not yet implemented: in_reduction clause on omp.target with "
+          "offload / target-device compilation");
+    // The byref / cleanup-region / two-argument-initializer in_reduction
+    // shapes are rejected earlier by checkImplementationStatus, and symbol
+    // resolution is guaranteed by verifyReductionVarList.
+    //
+    // The target body has no dedicated in_reduction block argument: each
+    // in_reduction variable is accessed through its map_entries block argument,
+    // which the host redirects to the per-task reduction-private storage below.
+    // So each in_reduction variable must also be captured by the target via a
+    // map_entries entry referring to the same outer SSA value. That value is
+    // also used as the `orig` argument of the runtime lookup, so without a
+    // matching map entry the outlined kernel would reference a value defined in
+    // the host function and fail IR verification. Record, for each in_reduction
+    // variable, the position of its matching map entry so the corresponding map
+    // block argument can be redirected once we are inside the body.
+    llvm::SmallDenseMap<Value, unsigned> mapVarPtrToArgIdx;
+    llvm::SmallDenseSet<Value> duplicateMapVarPtrs;
+    for (auto [idx, mapV] : llvm::enumerate(targetOp.getMapVars()))
+      if (auto mapInfo = mapV.getDefiningOp<omp::MapInfoOp>()) {
+        auto [it, inserted] =
+            mapVarPtrToArgIdx.try_emplace(mapInfo.getVarPtr(), idx);
+        if (!inserted)
+          duplicateMapVarPtrs.insert(mapInfo.getVarPtr());
+      }
+    inRedOrigPtrs.reserve(targetOp.getInReductionVars().size());
+    inRedMapArgIdx.reserve(targetOp.getInReductionVars().size());
+    for (Value v : targetOp.getInReductionVars()) {
+      if (duplicateMapVarPtrs.contains(v))
+        return targetOp.emitError()
+               << "in_reduction variable on omp.target has multiple matching "
+                  "map_entries entries for the same var_ptr; the redirect "
+                  "target is ambiguous";
+      auto it = mapVarPtrToArgIdx.find(v);
+      if (it == mapVarPtrToArgIdx.end())
+        return targetOp.emitError()
+               << "not yet implemented: in_reduction variable on omp.target "
+                  "must also be captured by a matching map_entries entry";
+      inRedMapArgIdx.push_back(it->second);
+      inRedOrigPtrs.push_back(moduleTranslation.lookupValue(v));
+    }
+  }
+
   // For some private variables, the MapsForPrivatizedVariablesPass
   // creates MapInfoOp instances. Go through the private variables and
   // the mapped variables so that during codegeneration we are able
@@ -8438,8 +8524,15 @@ convertOmpTarget(Operation &opInst, llvm::IRBuilderBase &builder,
         attr.isStringAttribute())
       llvmOutlinedFn->addFnAttr(attr);
 
-    for (auto [arg, mapOp] : llvm::zip_equal(mapBlockArgs, mapVars)) {
-      auto mapInfoOp = cast<omp::MapInfoOp>(mapOp.getDefiningOp());
+    for (auto [idx, arg] : llvm::enumerate(mapBlockArgs)) {
+      // in_reduction list items on omp.target are accessed through their
+      // map_entries block argument, which is redirected below to the per-task
+      // reduction-private storage returned by the runtime. Skip the default
+      // host-value mapping for those block arguments so the write-once
+      // mapValue mapping is free to be set to the private pointer.
+      if (llvm::is_contained(inRedMapArgIdx, idx))
+        continue;
+      auto mapInfoOp = cast<omp::MapInfoOp>(mapVars[idx].getDefiningOp());
       llvm::Value *mapOpValue =
           moduleTranslation.lookupValue(mapInfoOp.getVarPtr());
       moduleTranslation.mapValue(arg, mapOpValue);
@@ -8474,6 +8567,53 @@ convertOmpTarget(Operation &opInst, llvm::IRBuilderBase &builder,
             privateVarsInfo.llvmVars, privateVarsInfo.privatizers,
             targetOp.getPrivateNeedsBarrier(), &mappedPrivateVars)))
       return llvm::make_error<PreviouslyReportedError>();
+
+    // The target body accesses each in_reduction variable through its
+    // map_entries block argument. Redirect that block argument to the per-task
+    // private storage returned by __kmpc_task_reduction_get_th_data so the body
+    // accumulates into the reduction-private copy rather than the mapped
+    // original. The lookup must run inside the target task body so the gtid
+    // corresponds to the executing thread. The descriptor argument is NULL: the
+    // runtime walks enclosing taskgroups to locate the matching task_reduction
+    // registration for `origPtr`. Mirrors the in_reduction handling on
+    // omp.taskloop.context.
+    if (!inRedOrigPtrs.empty()) {
+      llvm::OpenMPIRBuilder &ompB = *ompBuilder;
+      llvm::Module *m = moduleTranslation.getLLVMModule();
+      llvm::LLVMContext &llvmCtx = m->getContext();
+      uint32_t srcLocSize;
+      llvm::Constant *srcLocStr = ompB.getOrCreateDefaultSrcLocStr(srcLocSize);
+      llvm::Value *bodyIdent = ompB.getOrCreateIdent(srcLocStr, srcLocSize);
+      llvm::Function *gtidFn = ompB.getOrCreateRuntimeFunctionPtr(
+          llvm::omp::OMPRTL___kmpc_global_thread_num);
+      llvm::Value *bodyGtid =
+          builder.CreateCall(gtidFn, {bodyIdent}, "omp_global_thread_num");
+      llvm::FunctionCallee getThData = ompB.getOrCreateRuntimeFunction(
+          *m, llvm::omp::OMPRTL___kmpc_task_reduction_get_th_data);
+      llvm::Type *ptrTy = llvm::PointerType::getUnqual(llvmCtx);
+      llvm::Value *nullDesc = llvm::ConstantPointerNull::get(ptrTy);
+      for (auto [mapArgIdx, origPtr] :
+           llvm::zip_equal(inRedMapArgIdx, inRedOrigPtrs)) {
+        // The runtime entry point takes (and returns) a generic,
+        // default-address-space `ptr`, so normalize a
+        // non-default-address-space original pointer to the generic address
+        // space before the call, and cast the returned private pointer back to
+        // the map block argument's address space when that differs. Mirrors the
+        // in_reduction handling on omp.taskloop.context.
+        BlockArgument mapBlockArg = mapBlockArgs[mapArgIdx];
+        if (auto *origPtrTy =
+                llvm::dyn_cast<llvm::PointerType>(origPtr->getType());
+            origPtrTy && origPtrTy->getAddressSpace() != 0)
+          origPtr = builder.CreateAddrSpaceCast(origPtr, ptrTy);
+        llvm::Value *priv = builder.CreateCall(
+            getThData, {bodyGtid, nullDesc, origPtr}, "omp.inred.priv");
+        if (auto *argPtrTy = llvm::dyn_cast<llvm::PointerType>(
+                moduleTranslation.convertType(mapBlockArg.getType()));
+            argPtrTy && argPtrTy->getAddressSpace() != 0)
+          priv = builder.CreateAddrSpaceCast(priv, argPtrTy);
+        moduleTranslation.mapValue(mapBlockArg, priv);
+      }
+    }
 
     LLVM::ModuleTranslation::SaveStack<OpenMPAllocStackFrame> frame(
         moduleTranslation, allocaIP, deallocBlocks);
