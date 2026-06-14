@@ -113,7 +113,11 @@ private:
 public:
   GCNSubtarget(const Triple &TT, StringRef GPU, StringRef FS,
                const GCNTargetMachine &TM, bool BufferOOBRelaxed = false,
-               bool TBufferOOBRelaxed = false);
+               bool TBufferOOBRelaxed = false,
+               AMDGPU::IsaInfo::TargetIDSetting XnackSetting =
+                   AMDGPU::IsaInfo::TargetIDSetting::Any,
+               AMDGPU::IsaInfo::TargetIDSetting SramEccSetting =
+                   AMDGPU::IsaInfo::TargetIDSetting::Any);
   ~GCNSubtarget() override;
 
   GCNSubtarget &initializeSubtargetDependencies(const Triple &TT, StringRef GPU,

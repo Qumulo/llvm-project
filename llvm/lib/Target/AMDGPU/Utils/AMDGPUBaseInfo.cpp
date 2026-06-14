@@ -1099,15 +1099,17 @@ VOPD::InstInfo getVOPDInstInfo(unsigned VOPDOpcode,
 
 namespace IsaInfo {
 
-AMDGPUTargetID::AMDGPUTargetID(const MCSubtargetInfo &STI,
-                               StringRef FeatureString)
+AMDGPUTargetID::AMDGPUTargetID(const MCSubtargetInfo &STI)
     : STI(STI), XnackSetting(STI.getFeatureBits().test(FeatureSupportsXNACK)
                                  ? TargetIDSetting::Any
                                  : TargetIDSetting::Unsupported),
       SramEccSetting(STI.getFeatureBits().test(FeatureSupportsSRAMECC)
                          ? TargetIDSetting::Any
-                         : TargetIDSetting::Unsupported) {
+                         : TargetIDSetting::Unsupported) {}
 
+AMDGPUTargetID::AMDGPUTargetID(const MCSubtargetInfo &STI,
+                               StringRef FeatureString)
+    : AMDGPUTargetID(STI) {
   // Check if xnack or sramecc is explicitly enabled or disabled.  In the
   // absence of the target features we assume we must generate code that can run
   // in any environment.
@@ -1130,7 +1132,7 @@ AMDGPUTargetID::AMDGPUTargetID(const MCSubtargetInfo &STI,
   // Targets without on/off mode support keep their initial setting (Any).
 
   bool XnackSupported = STI.getFeatureBits().test(FeatureXNACKOnOffModes);
-  bool SramEccSupported = isSramEccSupported();
+  bool SramEccSupported = STI.getFeatureBits().test(FeatureSupportsSRAMECC);
 
   if (XnackRequested) {
     if (XnackSupported) {
@@ -1187,6 +1189,27 @@ void AMDGPUTargetID::setTargetIDFromTargetIDStream(StringRef TargetID) {
       XnackSetting = getTargetIDSettingFromFeatureString(FeatureString);
     if (FeatureString.starts_with("sramecc"))
       SramEccSetting = getTargetIDSettingFromFeatureString(FeatureString);
+  }
+}
+
+// FIXME: This is a hack which should be removed. This attempts to turn these
+// feature bits into tri-states, where unspecified is distinct from absent. The
+// feature string is supposed to be evaluated as a bitvector only.
+void AMDGPUTargetID::setTargetIDFromFeaturesString(StringRef Features) {
+  // Parse features like "+xnack", "-xnack", "+sramecc", "-sramecc"
+  SmallVector<StringRef, 16> FeatureList;
+  Features.split(FeatureList, ',');
+
+  for (StringRef Feature : FeatureList) {
+    Feature = Feature.trim();
+    if (Feature == "+xnack")
+      XnackSetting = TargetIDSetting::On;
+    else if (Feature == "-xnack")
+      XnackSetting = TargetIDSetting::Off;
+    else if (Feature == "+sramecc")
+      SramEccSetting = TargetIDSetting::On;
+    else if (Feature == "-sramecc")
+      SramEccSetting = TargetIDSetting::Off;
   }
 }
 

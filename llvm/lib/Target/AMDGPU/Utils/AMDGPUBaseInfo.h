@@ -160,6 +160,7 @@ private:
   TargetIDSetting SramEccSetting;
 
 public:
+  explicit AMDGPUTargetID(const MCSubtargetInfo &STI);
   explicit AMDGPUTargetID(const MCSubtargetInfo &STI, StringRef FeatureString);
   ~AMDGPUTargetID() = default;
 
@@ -218,6 +219,11 @@ public:
   }
 
   void setTargetIDFromTargetIDStream(StringRef TargetID);
+
+  /// Parse subtarget feature string and set xnack/sramecc settings.
+  /// Looks for "+xnack"/"-xnack" and "+sramecc"/"-sramecc" in the feature
+  /// string.
+  void setTargetIDFromFeaturesString(StringRef Features);
 
   /// Write string representation to \p OS
   void print(raw_ostream &OS) const;

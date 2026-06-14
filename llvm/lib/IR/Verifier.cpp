@@ -2160,6 +2160,25 @@ Verifier::visitModuleFlag(const MDNode *Op,
       Check(Value->getZExtValue() <= 2,
             "'" + ID->getString() + "' module flag must be 0, 1, or 2");
     }
+
+    return;
+  }
+
+  if (ID->getString() == "amdgpu.xnack" ||
+      ID->getString() == "amdgpu.sramecc") {
+    Check(MFB == Module::Error,
+          "'" + ID->getString() +
+              "' module flag must use 'error' merge behaviour");
+    ConstantInt *Value =
+        mdconst::dyn_extract_or_null<ConstantInt>(Op->getOperand(2));
+    Check(Value, "'" + ID->getString() +
+                     "' module flag must have a constant integer value");
+    if (Value) {
+      Check(Value->getZExtValue() <= 1,
+            "'" + ID->getString() + "' module flag must be 0 or 1");
+    }
+
+    return;
   }
 
   if (ID->getString() == "CG Profile") {
