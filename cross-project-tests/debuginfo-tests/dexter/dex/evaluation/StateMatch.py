@@ -92,6 +92,7 @@ def _match_where_to_frame(
         )
     return True
 
+
 def match_where_to_frame(
     where: Where,
     frame: FrameIR,
@@ -121,6 +122,7 @@ class WhereMatchResult:
 
 
 StateMatchResult = Dict[Where, WhereMatchResult]
+
 
 def get_active_where_matches(
     script: DexterScript, step_info: StepIR, match_context: StateMatchContext
