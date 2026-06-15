@@ -11,7 +11,7 @@
 ; RUN: not llc -global-isel=0 -mtriple=amdgcn-amd-amdhsa -mcpu=gfx950 -filetype=null %s 2>&1 | FileCheck -check-prefix=ERR %s
 ; RUN: not llc -global-isel=1 -global-isel-abort=0 -mtriple=amdgcn-amd-amdhsa -mcpu=gfx950 -filetype=null %s 2>&1 | FileCheck -check-prefix=ERR %s
 
-; ERR: error: <unknown>:0:0: in function tanh_f32 void (ptr addrspace(1), float): intrinsic not supported on subtarget
+; ERR: error: <unknown>:0:0: in function tanh_f32 void (ptr addrspace(1), float): llvm.amdgcn.tanh requires target feature 'tanh-insts'
 
 ; FIXME: GlobalISel does not work with bf16
 
