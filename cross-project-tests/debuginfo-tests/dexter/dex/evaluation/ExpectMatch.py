@@ -144,9 +144,14 @@ class DebuggerExpectMatch:
                         None,
                     )
                 )
-                sub_expect_results[sub_expect] = DebuggerExpectMatch(
-                    self.expect, sub_expected, value, self.match_context
-                )
+                if value is None:
+                    sub_expect_results[sub_expect] = DebuggerExpectMatch(
+                        self.expect, None, None, self.match_context
+                    )
+                else:
+                    sub_expect_results[sub_expect] = get_expect_match(
+                        self.expect, sub_expected, value, self.match_context
+                    )
             match_result = MatchResult.from_bools(
                 any(
                     result.match_result == MatchResult.TRUE
