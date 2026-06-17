@@ -108,7 +108,7 @@ struct AllocFnsTy {
         SndParam(SndParam), AlignParam(AlignParam),
         Family(mangledNameForMallocFamily(Family)) {}
 
-  // TODO: Replace AllocTy with the familiy (String or enum). Right now these
+  // TODO: Replace AllocTy with the family (String or enum). Right now these
   // encode overlapping information and use different sources.
   AllocType AllocTy;
   unsigned NumParams = -1;
