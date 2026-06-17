@@ -169,7 +169,7 @@ struct DeallocationCallInfo {
   int AlignmentArgNo = -1;
 };
 
-/// Return all known information about the dellocation call \p CB.
+/// Return all known information about the deallocation call \p CB.
 LLVM_ABI std::optional<DeallocationCallInfo>
 getDeallocationCallInfo(const CallBase *CB, const TargetLibraryInfo *TLI);
 
