@@ -113,7 +113,7 @@ struct AllocFnsTy {
   AllocType AllocTy;
   unsigned NumParams = -1;
   // First and Second size parameters (or -1 if unused)
-  int FstParam, SndParam = -1;
+  int FstParam = -1, SndParam = -1;
   // Alignment parameter for aligned_alloc and aligned new
   int AlignParam = -1;
   // Name of default allocator function to group malloc/free calls by family
