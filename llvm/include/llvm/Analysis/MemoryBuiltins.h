@@ -156,7 +156,7 @@ LLVM_ABI std::optional<AllocationCallInfo>
 getAllocationCallInfo(const CallBase *CB, const TargetLibraryInfo *TLI,
                       Type *InitialValueTy);
 
-/// Description of an allocation call. Note that some elements might be
+/// Description of a deallocation call. Note that some elements might be
 /// null/negative.
 struct DeallocationCallInfo {
   /// The name of the allocation family, e.g., malloc.
