@@ -194,7 +194,7 @@ typedef DefaultSizeClassMap SizeClassMap;
 #    if SANITIZER_APPLE
 const uptr kAllocatorSpace = 0x600000000000ULL;
 #    else   // SANITIZER_APPLE
-const uptr kAllocatorSpace = ~(uptr)0;
+const uptr kAllocatorSpace = 0x500000000000ULL;
 #    endif  // SANITIZER_APPLE
 
 #    if defined(__powerpc64__)
