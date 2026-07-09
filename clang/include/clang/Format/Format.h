@@ -3376,12 +3376,17 @@ struct FormatStyle {
     /// Should be used for Verilog and SystemVerilog.
     /// https://standards.ieee.org/ieee/1800/6700/
     /// https://sci-hub.st/10.1109/IEEESTD.2018.8299595
-    LK_Verilog
+    LK_Verilog,
+    /// Should be used for Qumulo C parse-spec strings (value literals like
+    /// ``{ .field = value, key: value, .array = [ 1, 2, 3 ] }``) carried in
+    /// ``R"PS(...)PS"`` raw strings. Only selected via RawStringFormats.
+    LK_CParse
   };
   bool isCpp() const {
     return Language == LK_Cpp || Language == LK_C || Language == LK_ObjC;
   }
   bool isCSharp() const { return Language == LK_CSharp; }
+  bool isCParse() const { return Language == LK_CParse; }
   bool isJson() const { return Language == LK_Json; }
   bool isJava() const { return Language == LK_Java; }
   bool isJavaScript() const { return Language == LK_JavaScript; }
