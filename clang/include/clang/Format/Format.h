@@ -1350,6 +1350,27 @@ struct FormatStyle {
     BWACS_Always
   };
 
+  /// Different ways to wrap the brace before lambda (and ObjC block) bodies.
+  enum BraceWrappingBeforeLambdaBodyStyle : int8_t {
+    /// Never wrap the brace before a lambda body; keep it attached to the
+    /// lambda's signature.
+    /// \code
+    ///   connect([](int foo) {
+    ///     bar(foo);
+    ///   });
+    /// \endcode
+    BWBLB_Never,
+    /// Always wrap the brace before a lambda body.
+    /// \code
+    ///   connect(
+    ///     [](int foo)
+    ///     {
+    ///       bar(foo);
+    ///     });
+    /// \endcode
+    BWBLB_Always
+  };
+
   /// Precise control over the wrapping of braces.
   /// \code
   ///   # Should be declared this way:
@@ -1509,9 +1530,11 @@ struct FormatStyle {
     ///   }
     /// \endcode
     bool BeforeElse;
-    /// Wrap lambda block.
+    /// Wrap the brace before lambda (and ObjC block) bodies.
+    /// ``false`` and ``true`` are accepted for compatibility and map to
+    /// ``Never`` and ``Always``, respectively.
     /// \code
-    ///   true:
+    ///   Always:
     ///   connect(
     ///     []()
     ///     {
@@ -1519,13 +1542,13 @@ struct FormatStyle {
     ///       bar();
     ///     });
     ///
-    ///   false:
+    ///   Never:
     ///   connect([]() {
     ///     foo();
     ///     bar();
     ///   });
     /// \endcode
-    bool BeforeLambdaBody;
+    BraceWrappingBeforeLambdaBodyStyle BeforeLambdaBody;
     /// Wrap before ``while``.
     /// \code
     ///   true:

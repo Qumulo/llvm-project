@@ -414,7 +414,7 @@ bool ContinuationIndenter::canBreak(const LineState &State) {
       // Allow breaking opening brace of lambdas (when passed as function
       // arguments) to a new line when BeforeLambdaBody brace wrapping is
       // enabled.
-      (!Style.BraceWrapping.BeforeLambdaBody ||
+      (Style.BraceWrapping.BeforeLambdaBody != FormatStyle::BWBLB_Always ||
        Current.isNot(TT_LambdaLBrace)) &&
       CurrentState.NoLineBreakInOperand) {
     return false;
@@ -439,8 +439,9 @@ bool ContinuationIndenter::mustBreak(const LineState &State) {
   const FormatToken &Current = *State.NextToken;
   const FormatToken &Previous = *Current.Previous;
   const auto &CurrentState = State.Stack.back();
-  if (Style.BraceWrapping.BeforeLambdaBody && Current.CanBreakBefore &&
-      Current.is(TT_LambdaLBrace) && Previous.isNot(TT_LineComment)) {
+  if (Style.BraceWrapping.BeforeLambdaBody != FormatStyle::BWBLB_Never &&
+      Current.CanBreakBefore && Current.is(TT_LambdaLBrace) &&
+      Previous.isNot(TT_LineComment)) {
     auto LambdaBodyLength = getLengthToMatchingParen(Current, State.Stack);
     return LambdaBodyLength > getColumnLimit(State);
   }
@@ -1313,7 +1314,7 @@ unsigned ContinuationIndenter::addTokenOnNewLine(LineState &State,
       Current.isNot(TT_BinaryOperator) && !PreviousNonComment->opensScope() &&
       // We don't want to enforce line breaks for subsequent arguments just
       // because we have been forced to break before a lambda body.
-      (!Style.BraceWrapping.BeforeLambdaBody ||
+      (Style.BraceWrapping.BeforeLambdaBody != FormatStyle::BWBLB_Always ||
        Current.isNot(TT_LambdaLBrace))) {
     CurrentState.BreakBeforeParameter = true;
   }
@@ -1429,7 +1430,7 @@ ContinuationIndenter::getNewLineColumn(const LineState &State) {
            Style.IndentWidth;
   }
 
-  if (Style.BraceWrapping.BeforeLambdaBody &&
+  if (Style.BraceWrapping.BeforeLambdaBody != FormatStyle::BWBLB_Never &&
       Style.BraceWrapping.IndentBraces && Current.is(TT_LambdaLBrace)) {
     const auto From = Style.LambdaBodyIndentation == FormatStyle::LBI_Signature
                           ? CurrentState.Indent
@@ -1695,7 +1696,8 @@ static bool hasNestedBlockInlined(const FormatToken *Previous,
     return true;
 
   // Also a nested block if contains a lambda inside function with 1 parameter.
-  return Style.BraceWrapping.BeforeLambdaBody && Current.is(TT_LambdaLSquare);
+  return Style.BraceWrapping.BeforeLambdaBody == FormatStyle::BWBLB_Always &&
+         Current.is(TT_LambdaLSquare);
 }
 
 unsigned ContinuationIndenter::moveStateToNextToken(LineState &State,
@@ -2155,8 +2157,8 @@ void ContinuationIndenter::moveStatePastScopeOpener(LineState &State,
   NewState.BreakBeforeParameter = BreakBeforeParameter;
   NewState.HasMultipleNestedBlocks = (Current.BlockParameterCount > 1);
 
-  if (Style.BraceWrapping.BeforeLambdaBody && Current.Next &&
-      Current.is(tok::l_paren)) {
+  if (Style.BraceWrapping.BeforeLambdaBody == FormatStyle::BWBLB_Always &&
+      Current.Next && Current.is(tok::l_paren)) {
     // Search for any parameter that is a lambda.
     FormatToken const *next = Current.Next;
     while (next) {
@@ -2243,8 +2245,9 @@ void ContinuationIndenter::moveStateToNewBlock(LineState &State, bool NewLine) {
   // go on a single line. In this case we have to make sure there are no line
   // breaks in the body, otherwise we could just end up with a regular lambda
   // body without the brace wrapped.
-  bool NoLineBreak = Style.BraceWrapping.BeforeLambdaBody && !NewLine &&
-                     State.NextToken->is(TT_LambdaLBrace);
+  bool NoLineBreak =
+      Style.BraceWrapping.BeforeLambdaBody == FormatStyle::BWBLB_Always &&
+      !NewLine && State.NextToken->is(TT_LambdaLBrace);
 
   State.Stack.push_back(ParenState(State.NextToken, NewIndent,
                                    State.Stack.back().LastSpace,

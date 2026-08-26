@@ -242,7 +242,6 @@ TEST(ConfigParseTest, ParsesConfigurationBools) {
   CHECK_PARSE_NESTED_BOOL(BraceWrapping, AfterExternBlock);
   CHECK_PARSE_NESTED_BOOL(BraceWrapping, BeforeCatch);
   CHECK_PARSE_NESTED_BOOL(BraceWrapping, BeforeElse);
-  CHECK_PARSE_NESTED_BOOL(BraceWrapping, BeforeLambdaBody);
   CHECK_PARSE_NESTED_BOOL(BraceWrapping, BeforeWhile);
   CHECK_PARSE_NESTED_BOOL(BraceWrapping, IndentBraces);
   CHECK_PARSE_NESTED_BOOL(BraceWrapping, SplitEmptyFunction);
@@ -782,6 +781,21 @@ TEST(ConfigParseTest, ParsesConfiguration) {
   CHECK_PARSE("BraceWrapping:\n"
               "  AfterControlStatement: false",
               BraceWrapping.AfterControlStatement, FormatStyle::BWACS_Never);
+
+  Style.BraceWrapping.BeforeLambdaBody = FormatStyle::BWBLB_Never;
+  CHECK_PARSE("BraceWrapping:\n"
+              "  BeforeLambdaBody: Always",
+              BraceWrapping.BeforeLambdaBody, FormatStyle::BWBLB_Always);
+  CHECK_PARSE("BraceWrapping:\n"
+              "  BeforeLambdaBody: Never",
+              BraceWrapping.BeforeLambdaBody, FormatStyle::BWBLB_Never);
+  // For backward compatibility:
+  CHECK_PARSE("BraceWrapping:\n"
+              "  BeforeLambdaBody: true",
+              BraceWrapping.BeforeLambdaBody, FormatStyle::BWBLB_Always);
+  CHECK_PARSE("BraceWrapping:\n"
+              "  BeforeLambdaBody: false",
+              BraceWrapping.BeforeLambdaBody, FormatStyle::BWBLB_Never);
 
   Style.BreakAfterReturnType = FormatStyle::RTBS_All;
   CHECK_PARSE("BreakAfterReturnType: None", BreakAfterReturnType,

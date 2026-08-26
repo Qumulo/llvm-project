@@ -242,6 +242,20 @@ struct ScalarEnumerationTraits<
 
 template <>
 struct ScalarEnumerationTraits<
+    FormatStyle::BraceWrappingBeforeLambdaBodyStyle> {
+  static void
+  enumeration(IO &IO, FormatStyle::BraceWrappingBeforeLambdaBodyStyle &Value) {
+    IO.enumCase(Value, "Never", FormatStyle::BWBLB_Never);
+    IO.enumCase(Value, "Always", FormatStyle::BWBLB_Always);
+
+    // For backward compatibility.
+    IO.enumCase(Value, "false", FormatStyle::BWBLB_Never);
+    IO.enumCase(Value, "true", FormatStyle::BWBLB_Always);
+  }
+};
+
+template <>
+struct ScalarEnumerationTraits<
     FormatStyle::BreakBeforeConceptDeclarationsStyle> {
   static void
   enumeration(IO &IO, FormatStyle::BreakBeforeConceptDeclarationsStyle &Value) {
@@ -1524,7 +1538,7 @@ static void expandPresetsBraceWrapping(FormatStyle &Expanded) {
                             /*AfterExternBlock=*/false,
                             /*BeforeCatch=*/false,
                             /*BeforeElse=*/false,
-                            /*BeforeLambdaBody=*/false,
+                            /*BeforeLambdaBody=*/FormatStyle::BWBLB_Never,
                             /*BeforeWhile=*/false,
                             /*IndentBraces=*/false,
                             /*SplitEmptyFunction=*/true,
@@ -1564,7 +1578,7 @@ static void expandPresetsBraceWrapping(FormatStyle &Expanded) {
     Expanded.BraceWrapping.AfterExternBlock = true;
     Expanded.BraceWrapping.BeforeCatch = true;
     Expanded.BraceWrapping.BeforeElse = true;
-    Expanded.BraceWrapping.BeforeLambdaBody = true;
+    Expanded.BraceWrapping.BeforeLambdaBody = FormatStyle::BWBLB_Always;
     break;
   case FormatStyle::BS_Whitesmiths:
     Expanded.BraceWrapping.AfterCaseLabel = true;
@@ -1578,7 +1592,7 @@ static void expandPresetsBraceWrapping(FormatStyle &Expanded) {
     Expanded.BraceWrapping.AfterExternBlock = true;
     Expanded.BraceWrapping.BeforeCatch = true;
     Expanded.BraceWrapping.BeforeElse = true;
-    Expanded.BraceWrapping.BeforeLambdaBody = true;
+    Expanded.BraceWrapping.BeforeLambdaBody = FormatStyle::BWBLB_Always;
     break;
   case FormatStyle::BS_GNU:
     Expanded.BraceWrapping = {
@@ -1594,7 +1608,7 @@ static void expandPresetsBraceWrapping(FormatStyle &Expanded) {
         /*AfterExternBlock=*/true,
         /*BeforeCatch=*/true,
         /*BeforeElse=*/true,
-        /*BeforeLambdaBody=*/true,
+        /*BeforeLambdaBody=*/FormatStyle::BWBLB_Always,
         /*BeforeWhile=*/true,
         /*IndentBraces=*/true,
         /*SplitEmptyFunction=*/true,
@@ -1696,7 +1710,7 @@ FormatStyle getLLVMStyle(FormatStyle::LanguageKind Language) {
                              /*AfterExternBlock=*/false,
                              /*BeforeCatch=*/false,
                              /*BeforeElse=*/false,
-                             /*BeforeLambdaBody=*/false,
+                             /*BeforeLambdaBody=*/FormatStyle::BWBLB_Never,
                              /*BeforeWhile=*/false,
                              /*IndentBraces=*/false,
                              /*SplitEmptyFunction=*/true,

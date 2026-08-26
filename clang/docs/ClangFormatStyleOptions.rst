@@ -2498,11 +2498,14 @@ the configuration (without a prefix: ``Auto``).
       } else {
       }
 
-  * ``bool BeforeLambdaBody`` Wrap lambda block.
+  * ``BraceWrappingBeforeLambdaBodyStyle BeforeLambdaBody``
+    Wrap the brace before lambda (and ObjC block) bodies.
+    ``false`` and ``true`` are accepted for compatibility and map to
+    ``Never`` and ``Always``, respectively.
 
     .. code-block:: c++
 
-      true:
+      Always:
       connect(
         []()
         {
@@ -2510,11 +2513,35 @@ the configuration (without a prefix: ``Auto``).
           bar();
         });
 
-      false:
+      Never:
       connect([]() {
         foo();
         bar();
       });
+
+    Possible values:
+
+    * ``BWBLB_Never`` (in configuration: ``Never``)
+      Never wrap the brace before a lambda body; keep it attached to the
+      lambda's signature.
+
+      .. code-block:: c++
+
+        connect([](int foo) {
+          bar(foo);
+        });
+
+    * ``BWBLB_Always`` (in configuration: ``Always``)
+      Always wrap the brace before a lambda body.
+
+      .. code-block:: c++
+
+        connect(
+          [](int foo)
+          {
+            bar(foo);
+          });
+
 
   * ``bool BeforeWhile`` Wrap before ``while``.
 

@@ -4661,7 +4661,7 @@ TEST_F(FormatTest, FormatsCompactNamespaces) {
   Style.CompactNamespaces = true;
   Style.AllowShortLambdasOnASingleLine = FormatStyle::SLS_None;
   Style.BreakBeforeBraces = FormatStyle::BS_Custom;
-  Style.BraceWrapping.BeforeLambdaBody = true;
+  Style.BraceWrapping.BeforeLambdaBody = FormatStyle::BWBLB_Always;
   verifyFormat("namespace out { namespace in {\n"
                "}} // namespace out::in",
                Style);
@@ -14357,7 +14357,8 @@ TEST_F(FormatTest, LayoutCxx11BraceInitializers) {
   // when breaking before lambda bodies is enabled
   FormatStyle BreakBeforeLambdaBody = getLLVMStyle();
   BreakBeforeLambdaBody.BreakBeforeBraces = FormatStyle::BS_Custom;
-  BreakBeforeLambdaBody.BraceWrapping.BeforeLambdaBody = true;
+  BreakBeforeLambdaBody.BraceWrapping.BeforeLambdaBody =
+      FormatStyle::BWBLB_Always;
   BreakBeforeLambdaBody.AlwaysBreakBeforeMultilineStrings = true;
   verifyFormat(
       "std::runtime_error{\n"
@@ -20777,7 +20778,7 @@ TEST_F(FormatTest, AlignWithLineBreaks) {
   Style.ContinuationIndentWidth = 6;
   Style.IndentWidth = 8;
   Style.BreakBeforeBraces = FormatStyle::BS_Custom;
-  Style.BraceWrapping.BeforeLambdaBody = true;
+  Style.BraceWrapping.BeforeLambdaBody = FormatStyle::BWBLB_Always;
   Style.BraceWrapping.IndentBraces = true;
   Style.ColumnLimit = 32;
   verifyFormat("auto aaaaaaaaaaa = {};\n"
@@ -23780,7 +23781,8 @@ TEST_F(FormatTest, FormatsLambdas) {
   // AllowShortLambdasOnASingleLine
   FormatStyle LLVMWithBeforeLambdaBody = getLLVMStyle();
   LLVMWithBeforeLambdaBody.BreakBeforeBraces = FormatStyle::BS_Custom;
-  LLVMWithBeforeLambdaBody.BraceWrapping.BeforeLambdaBody = true;
+  LLVMWithBeforeLambdaBody.BraceWrapping.BeforeLambdaBody =
+      FormatStyle::BWBLB_Always;
   LLVMWithBeforeLambdaBody.AllowShortLambdasOnASingleLine =
       FormatStyle::SLS_None;
   verifyFormat("FctWithOneNestedLambdaInline_SLS_None(\n"
@@ -24250,7 +24252,7 @@ TEST_F(FormatTest, FormatsLambdas) {
                Style);
   Style.BinPackArguments = true;
   Style.BreakBeforeBraces = FormatStyle::BS_Custom;
-  Style.BraceWrapping.BeforeLambdaBody = true;
+  Style.BraceWrapping.BeforeLambdaBody = FormatStyle::BWBLB_Always;
   verifyFormat("void foo() {\n"
                "  aFunction(\n"
                "      1, b(c(foo, Bar{}, baz, [](d) -> Foo\n"
@@ -24274,7 +24276,8 @@ TEST_F(FormatTest, FormatsLambdas) {
 TEST_F(FormatTest, LambdaWithLineComments) {
   FormatStyle LLVMWithBeforeLambdaBody = getLLVMStyle();
   LLVMWithBeforeLambdaBody.BreakBeforeBraces = FormatStyle::BS_Custom;
-  LLVMWithBeforeLambdaBody.BraceWrapping.BeforeLambdaBody = true;
+  LLVMWithBeforeLambdaBody.BraceWrapping.BeforeLambdaBody =
+      FormatStyle::BWBLB_Always;
   LLVMWithBeforeLambdaBody.AllowShortLambdasOnASingleLine =
       FormatStyle::SLS_All;
 

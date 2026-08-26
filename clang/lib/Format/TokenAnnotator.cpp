@@ -6075,7 +6075,8 @@ bool TokenAnnotator::mustBreakBefore(const AnnotatedLine &Line,
     }
   }
 
-  if (Style.BraceWrapping.BeforeLambdaBody && Right.is(TT_LambdaLBrace) &&
+  if (Style.BraceWrapping.BeforeLambdaBody == FormatStyle::BWBLB_Always &&
+      Right.is(TT_LambdaLBrace) &&
       (Left.isPointerOrReference() || Left.is(TT_TemplateCloser))) {
     return true;
   }
@@ -6559,7 +6560,8 @@ bool TokenAnnotator::canBreakBefore(const AnnotatedLine &Line,
   }
 
   auto ShortLambdaOption = Style.AllowShortLambdasOnASingleLine;
-  if (Style.BraceWrapping.BeforeLambdaBody && Right.is(TT_LambdaLBrace)) {
+  if (Style.BraceWrapping.BeforeLambdaBody != FormatStyle::BWBLB_Never &&
+      Right.is(TT_LambdaLBrace)) {
     if (isAllmanLambdaBrace(Left))
       return !isEmptyLambdaAllowed(Left, ShortLambdaOption);
     if (isAllmanLambdaBrace(Right))
