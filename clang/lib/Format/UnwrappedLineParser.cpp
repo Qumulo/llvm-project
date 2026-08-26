@@ -1901,7 +1901,15 @@ void UnwrappedLineParser::parseStructuralElement(
       if (Prev && Prev->is(tok::identifier))
         break;
       // Block return type.
-      if (FormatTok->Tok.isAnyIdentifier() || FormatTok->isTypeName(LangOpts)) {
+      if (FormatTok->isOneOf(tok::kw_struct, tok::kw_union, tok::kw_enum)) {
+        // Tag-type return types, e.g. ^struct foo (...) {...}.
+        nextToken();
+        if (FormatTok->Tok.isAnyIdentifier())
+          nextToken();
+        while (FormatTok->is(tok::star))
+          nextToken();
+      } else if (FormatTok->Tok.isAnyIdentifier() ||
+                 FormatTok->isTypeName(LangOpts)) {
         nextToken();
         // Return types: pointers are ok too.
         while (FormatTok->is(tok::star))

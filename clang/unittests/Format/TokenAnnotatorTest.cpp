@@ -1994,6 +1994,32 @@ TEST_F(TokenAnnotatorTest, UnderstandsObjCBlock) {
   ASSERT_EQ(Tokens.size(), 27u) << Tokens;
   EXPECT_TOKEN(Tokens[0], tok::identifier, TT_Unknown); // Not CtorDtorDeclName.
   EXPECT_TOKEN(Tokens[1], tok::l_paren, TT_ObjCBlockLParen);
+
+  // Tag-type block return types.
+  Tokens = annotate("auto b = ^struct foo(int x) {\n"
+                    "  return x;\n"
+                    "};");
+  ASSERT_EQ(Tokens.size(), 17u) << Tokens;
+  EXPECT_TOKEN(Tokens[10], tok::l_brace, TT_ObjCBlockLBrace);
+
+  Tokens = annotate("auto b = ^union foo(int x) {\n"
+                    "  return x;\n"
+                    "};");
+  ASSERT_EQ(Tokens.size(), 17u) << Tokens;
+  EXPECT_TOKEN(Tokens[10], tok::l_brace, TT_ObjCBlockLBrace);
+
+  Tokens = annotate("auto b = ^enum foo(int x) {\n"
+                    "  return x;\n"
+                    "};");
+  ASSERT_EQ(Tokens.size(), 17u) << Tokens;
+  EXPECT_TOKEN(Tokens[10], tok::l_brace, TT_ObjCBlockLBrace);
+
+  // A tag-type block return type returned through a pointer.
+  Tokens = annotate("auto b = ^struct foo *(int x) {\n"
+                    "  return nullptr;\n"
+                    "};");
+  ASSERT_EQ(Tokens.size(), 18u) << Tokens;
+  EXPECT_TOKEN(Tokens[11], tok::l_brace, TT_ObjCBlockLBrace);
 }
 
 TEST_F(TokenAnnotatorTest, UnderstandsObjCMethodExpr) {
