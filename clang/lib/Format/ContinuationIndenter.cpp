@@ -13,6 +13,7 @@
 
 #include "ContinuationIndenter.h"
 #include "BreakableToken.h"
+#include "CParseFormat.h"
 #include "FormatInternal.h"
 #include "FormatToken.h"
 #include "WhitespaceManager.h"
@@ -2346,10 +2347,34 @@ unsigned ContinuationIndenter::reformatRawStringLiteral(
   unsigned LastStartColumn =
       Current.NewlinesBefore ? FirstStartColumn - NewPrefixSize : CurrentIndent;
 
-  std::pair<tooling::Replacements, unsigned> Fixes = internal::reformat(
-      RawStringStyle, RawText, {tooling::Range(0, RawText.size())},
-      FirstStartColumn, NextStartColumn, LastStartColumn, "<stdin>",
-      /*Status=*/nullptr);
+  std::pair<tooling::Replacements, unsigned> Fixes;
+  if (RawStringStyle.isCParse()) {
+    // Deterministic emitter: bypass the optimizing line formatter entirely.
+    // It returns the whole formatted body, which we splice in as one
+    // replacement; std::nullopt means "leave verbatim".
+    //
+    // A spec hangs from the enclosing statement's indent, not CurrentIndent:
+    // the latter is the protobuf-style argument-alignment column, which for a
+    // same-line trailing argument flows the spec out under the call's open
+    // paren (e.g. `record_txn(a, b, R"PS({`). FirstIndent keeps a wrapped
+    // spec's entries at FirstIndent + IndentWidth and its closer at
+    // FirstIndent regardless of how deeply the spec nests in call arguments.
+    std::optional<std::string> Formatted = formatCParseSpec(
+        RawText, /*FirstCol=*/FirstStartColumn, /*BaseIndent=*/State.FirstIndent,
+        Style.IndentWidth, getColumnLimit(State));
+    if (!Formatted)
+      return addMultilineToken(Current, State);
+    if (auto Err = Fixes.first.add(
+            tooling::Replacement("<stdin>", 0, RawText.size(), *Formatted))) {
+      llvm::consumeError(std::move(Err));
+      return addMultilineToken(Current, State);
+    }
+  } else {
+    Fixes = internal::reformat(
+        RawStringStyle, RawText, {tooling::Range(0, RawText.size())},
+        FirstStartColumn, NextStartColumn, LastStartColumn, "<stdin>",
+        /*Status=*/nullptr);
+  }
 
   auto NewCode = applyAllReplacements(RawText, Fixes.first);
   if (!NewCode)
