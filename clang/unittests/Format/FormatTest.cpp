@@ -24273,6 +24273,27 @@ TEST_F(FormatTest, FormatsLambdas) {
                Style);
 }
 
+TEST_F(FormatTest, BlockBraceWrappingAlways) {
+  FormatStyle Style = getLLVMStyleWithColumns(60);
+  Style.BreakBeforeBraces = FormatStyle::BS_Custom;
+  Style.BraceWrapping.BeforeLambdaBody = FormatStyle::BWBLB_Always;
+  Style.AllowShortLambdasOnASingleLine = FormatStyle::SLS_None;
+
+  // Under Always, a block with a parameter list always wraps its brace,
+  // even when the signature fits on one line.
+  verifyFormat("int (^b)(int) = ^int(int x)\n"
+               "{\n"
+               "  return x;\n"
+               "};",
+               Style);
+  // A bare "^{" introducer has no signature to wrap away from; its brace
+  // stays attached.
+  verifyFormat("auto b = ^{\n"
+               "  body();\n"
+               "};",
+               Style);
+}
+
 TEST_F(FormatTest, LambdaWithLineComments) {
   FormatStyle LLVMWithBeforeLambdaBody = getLLVMStyle();
   LLVMWithBeforeLambdaBody.BreakBeforeBraces = FormatStyle::BS_Custom;

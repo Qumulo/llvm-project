@@ -6076,7 +6076,7 @@ bool TokenAnnotator::mustBreakBefore(const AnnotatedLine &Line,
   }
 
   if (Style.BraceWrapping.BeforeLambdaBody == FormatStyle::BWBLB_Always &&
-      Right.is(TT_LambdaLBrace) &&
+      Right.isOneOf(TT_LambdaLBrace, TT_ObjCBlockLBrace) &&
       (Left.isPointerOrReference() || Left.is(TT_TemplateCloser))) {
     return true;
   }
@@ -6560,12 +6560,16 @@ bool TokenAnnotator::canBreakBefore(const AnnotatedLine &Line,
   }
 
   auto ShortLambdaOption = Style.AllowShortLambdasOnASingleLine;
+  // An ObjC block's body brace only participates in lambda brace wrapping
+  // when the block has a parameter list to wrap it away from; a bare "^{"
+  // introducer keeps its brace attached.
   if (Style.BraceWrapping.BeforeLambdaBody != FormatStyle::BWBLB_Never &&
-      Right.is(TT_LambdaLBrace)) {
+      (Right.is(TT_LambdaLBrace) ||
+       (Right.is(TT_ObjCBlockLBrace) && Left.is(tok::r_paren)))) {
+    if (Right.is(TT_ObjCBlockLBrace) || isAllmanLambdaBrace(Right))
+      return !isEmptyLambdaAllowed(Right, ShortLambdaOption);
     if (isAllmanLambdaBrace(Left))
       return !isEmptyLambdaAllowed(Left, ShortLambdaOption);
-    if (isAllmanLambdaBrace(Right))
-      return !isEmptyLambdaAllowed(Right, ShortLambdaOption);
   }
 
   if (Right.is(tok::kw_noexcept) && Right.is(TT_TrailingAnnotation)) {

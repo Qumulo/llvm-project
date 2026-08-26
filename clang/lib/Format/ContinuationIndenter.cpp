@@ -415,7 +415,7 @@ bool ContinuationIndenter::canBreak(const LineState &State) {
       // arguments) to a new line when BeforeLambdaBody brace wrapping is
       // enabled.
       (Style.BraceWrapping.BeforeLambdaBody != FormatStyle::BWBLB_Always ||
-       Current.isNot(TT_LambdaLBrace)) &&
+       Current.isNoneOf(TT_LambdaLBrace, TT_ObjCBlockLBrace)) &&
       CurrentState.NoLineBreakInOperand) {
     return false;
   }
@@ -440,7 +440,9 @@ bool ContinuationIndenter::mustBreak(const LineState &State) {
   const FormatToken &Previous = *Current.Previous;
   const auto &CurrentState = State.Stack.back();
   if (Style.BraceWrapping.BeforeLambdaBody != FormatStyle::BWBLB_Never &&
-      Current.CanBreakBefore && Current.is(TT_LambdaLBrace) &&
+      Current.CanBreakBefore &&
+      (Current.is(TT_LambdaLBrace) ||
+       (Current.is(TT_ObjCBlockLBrace) && Previous.is(tok::r_paren))) &&
       Previous.isNot(TT_LineComment)) {
     auto LambdaBodyLength = getLengthToMatchingParen(Current, State.Stack);
     return LambdaBodyLength > getColumnLimit(State);
@@ -1315,7 +1317,7 @@ unsigned ContinuationIndenter::addTokenOnNewLine(LineState &State,
       // We don't want to enforce line breaks for subsequent arguments just
       // because we have been forced to break before a lambda body.
       (Style.BraceWrapping.BeforeLambdaBody != FormatStyle::BWBLB_Always ||
-       Current.isNot(TT_LambdaLBrace))) {
+       Current.isNoneOf(TT_LambdaLBrace, TT_ObjCBlockLBrace))) {
     CurrentState.BreakBeforeParameter = true;
   }
 
@@ -1431,7 +1433,8 @@ ContinuationIndenter::getNewLineColumn(const LineState &State) {
   }
 
   if (Style.BraceWrapping.BeforeLambdaBody != FormatStyle::BWBLB_Never &&
-      Style.BraceWrapping.IndentBraces && Current.is(TT_LambdaLBrace)) {
+      Style.BraceWrapping.IndentBraces &&
+      Current.isOneOf(TT_LambdaLBrace, TT_ObjCBlockLBrace)) {
     const auto From = Style.LambdaBodyIndentation == FormatStyle::LBI_Signature
                           ? CurrentState.Indent
                           : State.FirstIndent;
@@ -2247,7 +2250,10 @@ void ContinuationIndenter::moveStateToNewBlock(LineState &State, bool NewLine) {
   // body without the brace wrapped.
   bool NoLineBreak =
       Style.BraceWrapping.BeforeLambdaBody == FormatStyle::BWBLB_Always &&
-      !NewLine && State.NextToken->is(TT_LambdaLBrace);
+      !NewLine &&
+      (State.NextToken->is(TT_LambdaLBrace) ||
+       (State.NextToken->is(TT_ObjCBlockLBrace) && State.NextToken->Previous &&
+        State.NextToken->Previous->is(tok::r_paren)));
 
   State.Stack.push_back(ParenState(State.NextToken, NewIndent,
                                    State.Stack.back().LastSpace,
