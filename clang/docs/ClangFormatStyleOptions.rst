@@ -5109,6 +5109,11 @@ the configuration (without a prefix: ``Auto``).
     https://standards.ieee.org/ieee/1800/6700/
     https://sci-hub.st/10.1109/IEEESTD.2018.8299595
 
+  * ``LK_CParse`` (in configuration: ``CParse``)
+    Should be used for Qumulo C parse-spec strings (value literals like
+    ``{ .field = value, key: value, .array = [ 1, 2, 3 ] }``) carried in
+    ``R"PS(...)PS"`` raw strings. Only selected via RawStringFormats.
+
 
 
 .. _LineEnding:
