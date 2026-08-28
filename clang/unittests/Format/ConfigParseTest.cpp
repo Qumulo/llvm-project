@@ -784,6 +784,9 @@ TEST(ConfigParseTest, ParsesConfiguration) {
 
   Style.BraceWrapping.BeforeLambdaBody = FormatStyle::BWBLB_Never;
   CHECK_PARSE("BraceWrapping:\n"
+              "  BeforeLambdaBody: MultiLine",
+              BraceWrapping.BeforeLambdaBody, FormatStyle::BWBLB_MultiLine);
+  CHECK_PARSE("BraceWrapping:\n"
               "  BeforeLambdaBody: Always",
               BraceWrapping.BeforeLambdaBody, FormatStyle::BWBLB_Always);
   CHECK_PARSE("BraceWrapping:\n"

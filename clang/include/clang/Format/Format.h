@@ -1360,6 +1360,18 @@ struct FormatStyle {
     ///   });
     /// \endcode
     BWBLB_Never,
+    /// Only wrap the brace when the lambda's signature spans multiple lines.
+    /// \code
+    ///   connect([](int foo) {
+    ///     bar(foo);
+    ///   });
+    ///   connect([](SomeReallyLongParameterType foo,
+    ///              SomeReallyLongParameterType bar)
+    ///   {
+    ///     baz(foo, bar);
+    ///   });
+    /// \endcode
+    BWBLB_MultiLine,
     /// Always wrap the brace before a lambda body.
     /// \code
     ///   connect(

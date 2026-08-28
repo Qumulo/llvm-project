@@ -344,6 +344,18 @@ bool ContinuationIndenter::canBreak(const LineState &State) {
                                    Current.closesBlockOrBlockTypeList(Style))) {
     return false;
   }
+  // With BeforeLambdaBody: MultiLine, the brace of a lambda or block body is
+  // placed deterministically: mustBreak forces the break exactly when the
+  // signature wrapped. Forbid the break otherwise -- if it were merely
+  // unforced, the optimizer could still wrap the brace of a single-line
+  // signature whenever unrelated penalties (e.g. trailing comments in the
+  // body) make every attached-brace layout expensive.
+  if (Style.BraceWrapping.BeforeLambdaBody == FormatStyle::BWBLB_MultiLine &&
+      (Current.is(TT_LambdaLBrace) ||
+       (Current.is(TT_ObjCBlockLBrace) && Previous.is(tok::r_paren))) &&
+      !CurrentState.LambdaSignatureWrapped) {
+    return false;
+  }
   // The opening "{" of a braced list has to be on the same line as the first
   // element if it is nested in another braced init list or function call.
   if (!Current.MustBreakBefore && Previous.is(tok::l_brace) &&
@@ -444,6 +456,10 @@ bool ContinuationIndenter::mustBreak(const LineState &State) {
       (Current.is(TT_LambdaLBrace) ||
        (Current.is(TT_ObjCBlockLBrace) && Previous.is(tok::r_paren))) &&
       Previous.isNot(TT_LineComment)) {
+    // With MultiLine, wrap the brace exactly when the signature's parameter
+    // list wrapped; a single-line signature keeps the brace attached.
+    if (Style.BraceWrapping.BeforeLambdaBody == FormatStyle::BWBLB_MultiLine)
+      return CurrentState.LambdaSignatureWrapped;
     auto LambdaBodyLength = getLengthToMatchingParen(Current, State.Stack);
     return LambdaBodyLength > getColumnLimit(State);
   }
@@ -1119,6 +1135,7 @@ unsigned ContinuationIndenter::addTokenOnNewLine(LineState &State,
   if (!CurrentState.ContainsLineBreak)
     Penalty += 15;
   CurrentState.ContainsLineBreak = true;
+  CurrentState.HasInnerLineBreak = true;
 
   Penalty += State.NextToken->SplitPenalty;
 
@@ -1907,6 +1924,7 @@ void ContinuationIndenter::moveStatePastFakeLParens(LineState &State,
     ParenState NewParenState = CurrentState;
     NewParenState.Tok = nullptr;
     NewParenState.ContainsLineBreak = false;
+    NewParenState.HasInnerLineBreak = false;
     NewParenState.LastOperatorWrapped = true;
     NewParenState.IsChainedConditional = false;
     NewParenState.IsWrappedConditional = false;
@@ -2002,8 +2020,10 @@ void ContinuationIndenter::moveStatePastFakeRParens(LineState &State) {
       // Do not pop the last element.
       break;
     }
+    const bool HasInnerLineBreak = State.Stack.back().HasInnerLineBreak;
     State.Stack.pop_back();
     State.Stack.back().VariablePos = VariablePos;
+    State.Stack.back().HasInnerLineBreak |= HasInnerLineBreak;
   }
 
   if (State.NextToken->ClosesRequiresClause && Style.IndentRequiresClause) {
@@ -2191,7 +2211,25 @@ void ContinuationIndenter::moveStatePastScopeCloser(LineState &State) {
        State.NextToken->is(TT_TemplateCloser) ||
        State.NextToken->is(TT_TableGenListCloser) ||
        (Current.is(tok::greater) && Current.is(TT_DictLiteral)))) {
+    // When closing the parameter list of a lambda or ObjC block signature,
+    // record on the enclosing state whether the parameters wrapped, so that
+    // BeforeLambdaBody: MultiLine can wrap the body's l_brace accordingly. A
+    // lambda's parameter l_paren is annotated; a block's r_paren is directly
+    // followed by the body's l_brace.
+    bool SignatureWrapped = false;
+    if (Current.is(tok::r_paren) && Current.MatchingParen &&
+        Style.BraceWrapping.BeforeLambdaBody == FormatStyle::BWBLB_MultiLine) {
+      const FormatToken *Next = Current.getNextNonComment();
+      if (Current.MatchingParen->is(TT_LambdaDefinitionLParen) ||
+          (Next && Next->is(TT_ObjCBlockLBrace))) {
+        SignatureWrapped = State.Stack.back().HasInnerLineBreak;
+      }
+    }
+    const bool HasInnerLineBreak = State.Stack.back().HasInnerLineBreak;
     State.Stack.pop_back();
+    State.Stack.back().HasInnerLineBreak |= HasInnerLineBreak;
+    if (SignatureWrapped)
+      State.Stack.back().LambdaSignatureWrapped = true;
   }
 
   auto &CurrentState = State.Stack.back();
@@ -2254,6 +2292,12 @@ void ContinuationIndenter::moveStateToNewBlock(LineState &State, bool NewLine) {
       (State.NextToken->is(TT_LambdaLBrace) ||
        (State.NextToken->is(TT_ObjCBlockLBrace) && State.NextToken->Previous &&
         State.NextToken->Previous->is(tok::r_paren)));
+
+  // The wrap-or-not decision for this body's l_brace has been made; consume
+  // the signature-wrap marker so it can't leak to a subsequent sibling lambda
+  // or block in the same scope (e.g. one with no parameter list of its own).
+  if (State.NextToken->isOneOf(TT_LambdaLBrace, TT_ObjCBlockLBrace))
+    State.Stack.back().LambdaSignatureWrapped = false;
 
   State.Stack.push_back(ParenState(State.NextToken, NewIndent,
                                    State.Stack.back().LastSpace,

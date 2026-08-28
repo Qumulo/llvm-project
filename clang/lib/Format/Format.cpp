@@ -246,6 +246,7 @@ struct ScalarEnumerationTraits<
   static void
   enumeration(IO &IO, FormatStyle::BraceWrappingBeforeLambdaBodyStyle &Value) {
     IO.enumCase(Value, "Never", FormatStyle::BWBLB_Never);
+    IO.enumCase(Value, "MultiLine", FormatStyle::BWBLB_MultiLine);
     IO.enumCase(Value, "Always", FormatStyle::BWBLB_Always);
 
     // For backward compatibility.

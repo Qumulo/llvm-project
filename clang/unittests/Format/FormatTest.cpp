@@ -24273,6 +24273,100 @@ TEST_F(FormatTest, FormatsLambdas) {
                Style);
 }
 
+TEST_F(FormatTest, LambdaBraceWrappingMultiLine) {
+  FormatStyle Style = getLLVMStyleWithColumns(60);
+  Style.BreakBeforeBraces = FormatStyle::BS_Custom;
+  Style.BraceWrapping.BeforeLambdaBody = FormatStyle::BWBLB_MultiLine;
+  Style.AllowShortLambdasOnASingleLine = FormatStyle::SLS_None;
+
+  // A single-line signature keeps the brace attached.
+  verifyFormat("auto l = [](int a) {\n"
+               "  return a;\n"
+               "};",
+               Style);
+  // No parameter list: the brace stays attached.
+  verifyFormat("auto l = [&] {\n"
+               "  return 17;\n"
+               "};",
+               Style);
+  // A wrapped signature moves the brace to its own line.
+  verifyFormat("auto l = [](SomeVeryLongParameterType aaaaaaaaaaaaaaaaaaaaa,\n"
+               "            SomeVeryLongParameterType bbbbbbbbbbbbbbbbbbbb)\n"
+               "{\n"
+               "  return aaaaaaaaaaaaaaaaaaaaa;\n"
+               "};",
+               Style);
+  // Lambdas as call arguments hang the brace from the lambda's
+  // own indentation level.
+  verifyFormat("connect([](SomeVeryLongParameterType aaaaaaaaaaaaaa,\n"
+               "           SomeVeryLongParameterType bbbbbbbbbbbbbb)\n"
+               "        {\n"
+               "          body();\n"
+               "        });",
+               Style);
+
+  // ObjC blocks are treated exactly like C++ lambdas.
+  verifyFormat("int (^b)(int) = ^int(int x) {\n"
+               "  return x;\n"
+               "};",
+               Style);
+  verifyFormat("auto b = ^{\n"
+               "  body();\n"
+               "};",
+               Style);
+  verifyFormat("int (^b)(int) =\n"
+               "    ^int(SomeVeryLongParameterType aaaaaaaaaaaaaa,\n"
+               "         SomeVeryLongParameterType bbbbbbbbbbbbbbbbbbbbb)\n"
+               "{\n"
+               "  return aaaaaaaaaaaaaa;\n"
+               "};",
+               Style);
+  // Blocks with tag-type return types are recognized too.
+  verifyFormat("auto b =\n"
+               "    ^struct some_struct(struct foo *aaaaaaaaaaaaaaaaaaaa,\n"
+               "                        struct bar *bbbbbbbbbbbbbbbbbbbb)\n"
+               "{\n"
+               "  body();\n"
+               "};",
+               Style);
+}
+
+TEST_F(FormatTest, MultiLineBraceNeverWrappedForSingleLineSignature) {
+  // With BeforeLambdaBody: MultiLine, a single-line signature must keep its
+  // brace attached even when penalties inside the body (here: trailing
+  // comments after a long string argument) make every attached-brace layout
+  // expensive. The break must be forbidden, not merely unforced; otherwise
+  // the optimizer wraps the brace and anchors the body to the enclosing
+  // call's paren-alignment column.
+  FormatStyle Style = getLLVMStyleWithColumns(100);
+  Style.IndentWidth = 4;
+  Style.ContinuationIndentWidth = 4;
+  Style.ObjCBlockIndentWidth = 4;
+  // AlignAfterOpenBracket: AlwaysBreak
+  Style.AlignAfterOpenBracket = true;
+  Style.BreakAfterOpenBracketBracedList = true;
+  Style.BreakAfterOpenBracketFunction = true;
+  Style.BreakAfterOpenBracketIf = true;
+  Style.BinPackArguments = false;
+  Style.AlwaysBreakBeforeMultilineStrings = true;
+  Style.BreakBeforeBraces = FormatStyle::BS_Custom;
+  Style.BraceWrapping.AfterFunction = true;
+  Style.BraceWrapping.BeforeLambdaBody = FormatStyle::BWBLB_MultiLine;
+
+  verifyFormat("static void t(void)\n"
+               "{\n"
+               "    run_test_with_rsched(^void() {\n"
+               "        fixture_var(\n"
+               "            fixture,\n"
+               "            COMPACT_JOB,\n"
+               "            2 /* required_parallelism */,\n"
+               "            \"{1: {1.1, 2.1, 3.1}, 2: {4.1, 2.1, 5.1}}\" /* "
+               "initial_pstore_disks */);\n"
+               "    });\n"
+               "}",
+               Style);
+}
+
 TEST_F(FormatTest, BlockBraceWrappingAlways) {
   FormatStyle Style = getLLVMStyleWithColumns(60);
   Style.BreakBeforeBraces = FormatStyle::BS_Custom;

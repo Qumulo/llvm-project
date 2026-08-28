@@ -238,7 +238,8 @@ struct ParenState {
         BreakBeforeClosingAngle(false), AvoidBinPacking(AvoidBinPacking),
         BreakBeforeParameter(false), NoLineBreak(NoLineBreak),
         NoLineBreakInOperand(false), LastOperatorWrapped(true),
-        ContainsLineBreak(false), ContainsUnwrappedBuilder(false),
+        ContainsLineBreak(false), HasInnerLineBreak(false),
+        LambdaSignatureWrapped(false), ContainsUnwrappedBuilder(false),
         AlignColons(true), ObjCSelectorNameFound(false),
         HasMultipleNestedBlocks(false), NestedBlockInlined(false),
         IsInsideObjCArrayLiteral(false), IsCSharpGenericTypeConstraint(false),
@@ -345,6 +346,25 @@ struct ParenState {
   /// parenthesis.
   bool ContainsLineBreak : 1;
 
+  /// \c true if a line break occurred anywhere inside this \c ParenState's
+  /// scope, including within nested (real or fake) paren levels. Unlike
+  /// \c ContainsLineBreak, this is propagated into the enclosing state when a
+  /// level is popped, so a scope closer can tell whether its range wrapped.
+  ///
+  /// \c ContainsLineBreak cannot serve this purpose: it is owned by the
+  /// penalty heuristic above, which deliberately resets it on fake paren
+  /// levels and drops it on pop. In particular, breaks between a lambda's
+  /// parameters mostly land on fake operator-precedence levels, so the
+  /// parameter list's own level never sees them through that bit.
+  bool HasInnerLineBreak : 1;
+
+  /// \c true if the parameter list of a lambda (or ObjC block) signature that
+  /// was closed at this \c ParenState's level contained a line break. Used by
+  /// ``BraceWrapping.BeforeLambdaBody: MultiLine`` to decide whether the
+  /// upcoming body's l_brace must be wrapped; consumed (reset) when that
+  /// l_brace opens its block.
+  bool LambdaSignatureWrapped : 1;
+
   /// \c true if this \c ParenState contains multiple segments of a
   /// builder-type call on one line.
   bool ContainsUnwrappedBuilder : 1;
@@ -429,6 +449,10 @@ struct ParenState {
       return VariablePos < Other.VariablePos;
     if (ContainsLineBreak != Other.ContainsLineBreak)
       return ContainsLineBreak;
+    if (HasInnerLineBreak != Other.HasInnerLineBreak)
+      return HasInnerLineBreak;
+    if (LambdaSignatureWrapped != Other.LambdaSignatureWrapped)
+      return LambdaSignatureWrapped;
     if (ContainsUnwrappedBuilder != Other.ContainsUnwrappedBuilder)
       return ContainsUnwrappedBuilder;
     if (NestedBlockInlined != Other.NestedBlockInlined)

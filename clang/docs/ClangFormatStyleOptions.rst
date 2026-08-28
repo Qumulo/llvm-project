@@ -2531,6 +2531,20 @@ the configuration (without a prefix: ``Auto``).
           bar(foo);
         });
 
+    * ``BWBLB_MultiLine`` (in configuration: ``MultiLine``)
+      Only wrap the brace when the lambda's signature spans multiple lines.
+
+      .. code-block:: c++
+
+        connect([](int foo) {
+          bar(foo);
+        });
+        connect([](SomeReallyLongParameterType foo,
+                   SomeReallyLongParameterType bar)
+        {
+          baz(foo, bar);
+        });
+
     * ``BWBLB_Always`` (in configuration: ``Always``)
       Always wrap the brace before a lambda body.
 
