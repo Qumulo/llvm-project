@@ -114,7 +114,12 @@ public:
       std::lock_guard<std::mutex> Lock(Mutex);
       WorkStack.push_back(std::move(F));
     }
-    Cond.notify_one();
+    // Wake every worker, not one. glibc without the fix for
+    // https://sourceware.org/bugzilla/show_bug.cgi?id=25847 can lose a
+    // pthread_cond_signal, leaving every worker asleep with this task queued
+    // and the caller waiting on it forever. pthread_cond_broadcast is not
+    // affected.
+    Cond.notify_all();
   }
 
   size_t getThreadCount() const override { return ThreadCount; }
