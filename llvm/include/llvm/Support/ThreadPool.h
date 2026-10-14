@@ -172,7 +172,9 @@ private:
       Tasks.emplace_back(std::make_pair(std::move(Task), Group));
       requestedThreads = ActiveThreads + Tasks.size();
     }
-    QueueCondition.notify_one();
+    // notify_all for the same reason as ThreadPoolExecutor::add in
+    // Parallel.cpp.
+    QueueCondition.notify_all();
     grow(requestedThreads);
   }
 
